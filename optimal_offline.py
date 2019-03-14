@@ -6,22 +6,13 @@ class KServer:
     A class that computes the optimal movement of k servers through a series of
     requests if the series of requests are known from beforehand.
     """
-    def __init__(self):
-        """
-        Initialize an empty instance of this problem.
-        """
-        self.graph = None
-        self.BigNumber = 1. * (1<<60) # Maximum weight it is able to handle
-        self.dist = None
-        self.dist_scaling = 10**9
-        self.servers = None
-        self.requests = None
-
-    def __init__(self, servers, requests, order):
+    def __init__(self, servers = None, requests = None, order = 0):
         """
         Initialize an instance with given list of servers, requests, and an order for the norm.
         """
-        self.__init__()
+        self.graph = None
+        self.BigNumber = (1<<30) # Maximum weight it is able to handle
+        self.dist_scaling = 1. * 10**5
         self.set_metric(order)
         self.add_servers(servers)
         self.add_requests(requests)
@@ -100,7 +91,7 @@ class KServer:
             # Add edge from request to request' with a very low cost
             self.graph.AddArcWithCapacityAndUnitCost(current_request_node, current_request_node + 1, 1, -self.BigNumber)
 
-            for next_request_node in range(current_request_node, S + 2*R + 1, 2):
+            for next_request_node in range(current_request_node + 2, S + 2*R + 1, 2):
                 # Add edge from request' to all next requests
                 self.graph.AddArcWithCapacityAndUnitCost(current_request_node + 1, next_request_node, 1,
                                                          self.dist(node_to_request(current_request_node), 
