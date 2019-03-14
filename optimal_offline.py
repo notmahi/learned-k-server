@@ -6,7 +6,7 @@ class KServer:
     A class that computes the optimal movement of k servers through a series of
     requests if the series of requests are known from beforehand.
     """
-    def __init__(self, servers = None, requests = None, order = 0):
+    def __init__(self, servers = None, requests = None, order = 2):
         """
         Initialize an instance with given list of servers, requests, and an order for the norm.
         """
@@ -16,6 +16,11 @@ class KServer:
         self.set_metric(order)
         self.add_servers(servers)
         self.add_requests(requests)
+        if servers is not None and requests is not None:
+            if len(servers) > len(requests):
+                import warnings
+                warnings.warn('You have more servers than request; \
+                    Please check the order in which you\'re passing in the arguments')
 
     def set_metric(self, order):
         """
