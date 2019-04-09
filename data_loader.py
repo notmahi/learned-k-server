@@ -1,21 +1,36 @@
 import numpy as np
-
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset, DataLoader
 
 from optimal_offline import KServer
 
-class Distribution(object):
+
+class AbstractDistribution(object):
+    """
+    Abstract class for all distrubitons.
+    """
+    def __init__(self):
+        raise NotImplementedError
+
+    def sample(self, n):
+        raise NotImplementedError
+
+
+class NumpyDistribution(AbstractDistribution):
     """
     Reference wrapper around numpy distributions.
     """
-    def __init__(self, distribution_name='normal', args=(0., 1.), seed=0):
+    def __init__(self, distribution_name='normal', shift= np.array([0]), args=(1.,), seed=0):
         self.distribution = getattr(np.random, distribution_name)
+        self.args = args
+        self.shift = shift
         np.random.seed(seed)
 
     def sample(self, n):
-        return self.distribution(*self.args, n)
+        sz = (n,) + np.array(self.shift).shape
+        return self.shift + self.distribution(*self.args, size=sz)
 
-class MixtureModels(object):
+
+class MixedDistribution(AbstractDistribution):
     """
     Reference implementation of mixture models. Takes a list of distributions and 
     their associated, and then allows you to sample from the mixed models.
@@ -24,14 +39,14 @@ class MixtureModels(object):
         assert len(distributions) == len(weights)
         self.distributions = distributions
         self.weights = np.array(weights, dtype='f')
-        self.weights /= weights.sum()
+        self.weights /= self.weights.sum()
         np.random.seed(seed)
 
     def sample(self, n):
-        num_samples = np.rint([n * p for p in self.weights])
-        samples = [self.distributions.sample(num_sample) for num_sample in num_samples]
+        num_samples = np.rint([n * p for p in self.weights]).astype(int)
+        samples = [self.distributions[i].sample(num_sample) for i, num_sample in enumerate(num_samples)]
         if np.sum(num_samples) < n:
-            choices = np.random.choice(len(self.distributions), (n - np.sum(num_samples), p=self.weights))
+            choices = np.random.choice(len(self.distributions), (n - np.sum(num_samples)), p=self.weights)
             for c in choices:
                 samples.append(self.distributions[c].sample(1))
         samples = np.concatenate(samples)
@@ -39,7 +54,7 @@ class MixtureModels(object):
         return samples
 
 class KServerDataset(Dataset):
-    I"""
+    """
     A generator for k-server datasets.
     """
     def __init__(self, num_servers, 
@@ -59,4 +74,71 @@ class KServerDataset(Dataset):
         return (self.requests[idx], self.optimal_movement[idx])
 
 
+class ConstantDistribution(AbstractDistribution):
+    def __init__(self, points):
+        self.points = points
+    
+    def sample(self, n):
+        assert len(self.points) == n
+        return self.points
 
+
+def _kserver_training_set(len_data, num_servers, 
+            num_requests, server_distribution, request_distribution, 
+            dimensions=2, distance_metric=2, seed=0):
+    np.random.seed(seed)
+    batch_size = num_requests
+    single_datasets = []
+    for i in range(len_data // num_requests):
+        single_datasets.append(KServerDataset(num_servers, 
+                                num_requests, server_distribution, 
+                                request_distribution, dimensions, 
+                                distance_metric, seed = np.random.uniform()))
+    return ConcatDataset(single_datasets)
+
+
+def _kserver_loader(len_data, num_servers, 
+            num_requests, server_distribution, request_distribution, 
+            dimensions=2, distance_metric=2, seed=0):
+    dataset = _kserver_training_set(len_data, num_servers, 
+                                   num_requests, server_distribution, 
+                                   request_distribution, dimensions, 
+                                   distance_metric, seed)
+    return DataLoader(dataset, batch_size=num_requests, shuffle=False, num_workers=2)
+
+
+def kserver_test_and_train(len_train, len_test, num_servers, num_requests,
+                           server_distribution, request_distribution, 
+                           dimensions=2, distance_metric=2, seed=0):
+    train_loader = _kserver_loader(len_train, num_servers, num_requests, server_distribution, 
+                                      request_distribution, dimensions, distance_metric, seed)
+    test_loader = _kserver_loader(len_test, num_servers, num_requests, server_distribution, 
+                                      request_distribution, dimensions, distance_metric, seed)
+    return train_loader, test_loader
+
+
+def distribution_from_centers(mus, sigmas, weights=None, seed=0):
+    dist = []
+    if weights is None:
+        weights = [1.] * len(mus)
+    for mu, sigma in zip(mus, sigmas):
+        dist.append(NumpyDistribution(distribution_name='normal', shift = mu, args=(sigma,), seed=seed))
+    return MixedDistribution(dist, weights)
+
+
+"""
+Testing the code.
+
+d = distribution_from_centers(np.array([[1,1],
+                                        [-1,1],
+                                        [-1,-1],
+                                        [1,-1],
+                                        [1,0],
+                                        [0,1],
+                                        [-1,0],
+                                        [0,-1],
+                                        [0,0]
+                                        ], dtype='f'), np.array([0.5] * 9))
+
+print(d.sample(100))
+"""
