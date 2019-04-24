@@ -6,9 +6,8 @@ import torch.optim as optim
 import os
 import numpy as np
 
-
 class LSTMModel(nn.Module):
-    def __init__(self, space_dim, num_servers, hidden_dim, num_layers, bidirectional=False):
+    def __init__(self, space_dim, num_servers, hidden_dim, num_layers, bidirectional=True):
         super(LSTMModel, self).__init__()
         self.dim = space_dim
         self.num_servers = num_servers
