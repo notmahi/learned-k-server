@@ -2,6 +2,8 @@ import argparse
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Train a neural net to solve the online k-server problem')
+    parser.add_argument("--manual_seed", "-s", type=int, default=0,
+                        help="Random seed")
     parser.add_argument("--model", "-m", type=str, choices=['lstm', 'fc'], default='lstm',
                         help="pick the model to train with")
     parser.add_argument("--epochs", "-e", type=int, default=10,
