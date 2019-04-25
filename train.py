@@ -13,6 +13,9 @@ from data_loader import *
 from models import model_dict
 from util import get_parser
 
+parser = get_parser()
+parser.parse_args()
+
 use_cuda = torch.cuda.is_available()
 if use_cuda:
     if parser.manual_seed >= 0:
@@ -85,9 +88,6 @@ def test(epoch, model, test_set, writer, verbose=True):
 
 def save_model(epoch, model):
     pass
-
-parser = get_parser()
-parser.parse_args()
 
 # Summary writer and model directory
 model_dir = parser.model_dir
