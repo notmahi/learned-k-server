@@ -31,7 +31,7 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
         model_cost = 0
         locations = torch.Tensor(servers, device=device)
         total_loss = 0
-		optimizer.zero_grad()
+        optimizer.zero_grad()
         for X, y in zip(X_batch, y_batch):
             # go through each example, get the starting points, etc.
             X_all = torch.cat(locations, X)
