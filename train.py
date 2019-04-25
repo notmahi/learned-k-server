@@ -13,20 +13,78 @@ from data_loader import *
 from models import model_dict
 from util import get_parser
 
-def train(epoch, model, training_set, optimizer, writer, verbose=True):
-    pass
-
-def test(epoch, model, test_set, writer, verbose=True):
-    pass
-
-def save_model(epoch, model):
-    pass
-
 use_cuda = torch.cuda.is_available()
 if use_cuda:
     if parser.manual_seed >= 0:
     	torch.cuda.manual_seed(parser.manual_seed)
 device = torch.device("cuda" if use_cuda else "cpu")
+
+def train(epoch, model, training_set, optimizer, writer, verbose=True):
+    total_optimal_cost = 0
+    total_model_cost = 0
+    total_model_loss = 0
+    model.train()
+    for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(training_set)):
+        # first, get the list of servers
+        servers = training_set.datasets[i].servers
+        optimal_cost = training_set.datasets[i].cost
+        model_cost = 0
+        locations = torch.Tensor(servers, device=device)
+        total_loss = 0
+		optimizer.zero_grad()
+        for X, y in zip(X_batch, y_batch):
+            # go through each example, get the starting points, etc.
+            X_all = torch.cat(locations, X)
+            # log_probs is the log probability of the elements
+            log_probs = model(X_all)
+            model_loss = F.nll_loss(log_probs, y)
+            total_loss += model_loss
+            # Gives the index of the server to move
+            # TODO: See if we should change it to a probabilistic model
+            model_pred = log_probs.argmax()
+            model_cost += distance_function(locations[i], y).item()
+            locations[i] = y
+        total_model_loss += (model_loss.item())
+        model_loss.backwards()
+        optimizer.step()
+    if verbose:
+        print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
+            i, len(training_set), total_model_cost, total_optimal_cost, 
+            total_model_cost/total_optimal_cost, total_model_loss))
+
+
+def test(epoch, model, test_set, writer, verbose=True):
+    total_optimal_cost = 0
+    total_model_cost = 0
+    total_model_loss = 0
+    model.test()
+    for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(test_set)):
+        # first, get the list of servers
+        servers = test_set.datasets[i].servers
+        optimal_cost = test_set.datasets[i].cost
+        model_cost = 0
+        locations = torch.Tensor(servers, device=device)
+        total_loss = 0
+        for X, y in zip(X_batch, y_batch):
+            # go through each example, get the starting points, etc.
+            X_all = torch.cat(locations, X)
+            # log_probs is the log probability of the elements
+            log_probs = model(X_all)
+            model_loss = F.nll_loss(log_probs, y)
+            total_loss += model_loss
+            # Gives the index of the server to move
+            model_pred = log_probs.argmax()
+            model_cost += distance_function(locations[i], y).item()
+            locations[i] = y
+        total_model_loss += (model_loss.item())
+    if verbose:
+        print('Testing:')
+        print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
+            i, len(training_set), total_model_cost, total_optimal_cost, 
+            total_model_cost/total_optimal_cost, total_model_loss))
+
+def save_model(epoch, model):
+    pass
 
 parser = get_parser()
 parser.parse_args()
@@ -44,6 +102,9 @@ test_set_size = parser.n_requests_test
 dims = parser.dims
 metric = parser.dist_metric
 
+def distance_function(x, y, metric=metric):
+    return torch.norm(x-y, p=metric)
+
 # Model params
 architecture = parser.model
 hidden_layers = parser.hidden_layers
@@ -60,6 +121,7 @@ if model == None:
     model = model_dict['lstm']
 
 model = model(dims, num_servers, hidden_units, hidden_layers)
+model = model.to(device)
 optimizer = optimizer(model.parameters(), lr=learning_rate)
 
 # Load dataset
@@ -79,7 +141,7 @@ training_set, test_set = kserver_test_and_train(training_set_size,
                                                 test_set_size, 
                                                 num_servers, batch_size, 
                                                 server_distribution, request_distribution, 
-                                                dimensions=dims, distance_metric=metric)
+                                                dimensions=dims, distance_metric=metric, device=device)
 
 if __name__ == '__main__':
     for e in range(epochs):

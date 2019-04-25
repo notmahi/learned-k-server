@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset, ConcatDataset, DataLoader
 
 from optimal_offline import KServer
@@ -59,13 +60,19 @@ class KServerDataset(Dataset):
     """
     def __init__(self, num_servers, 
                  num_requests, server_distribution, request_distribution, 
-                 dimensions=2, distance_metric=2, seed=0):
+                 dimensions=2, distance_metric=2, seed=0, device='cpu'):
         np.random.seed(seed)
         self.servers = server_distribution.sample(num_servers)
         self.requests = request_distribution.sample(num_requests)
         self.instance = KServer(servers = self.servers, requests= self.requests, order=distance_metric)
         self.cost = self.instance.optimal_cost()
         self.optimal_movement = self.instance.get_serves()
+
+        if type(device) == str:
+            device = torch.device(device)
+        self.servers = torch.Tensor(self.servers, device=device)
+        self.requests = torch.Tensor(self.requests, device=device)
+        self.optimal_movement = torch.Tensor(self.optimal_movement, device=device)
 
     def __len__(self):
         return len(self.optimal_movement)
@@ -85,7 +92,7 @@ class ConstantDistribution(AbstractDistribution):
 
 def _kserver_training_set(len_data, num_servers, 
             num_requests, server_distribution, request_distribution, 
-            dimensions=2, distance_metric=2, seed=0):
+            dimensions=2, distance_metric=2, seed=0, device='cpu'):
     np.random.seed(seed)
     batch_size = num_requests
     single_datasets = []
@@ -93,27 +100,28 @@ def _kserver_training_set(len_data, num_servers,
         single_datasets.append(KServerDataset(num_servers, 
                                 num_requests, server_distribution, 
                                 request_distribution, dimensions, 
-                                distance_metric, seed = np.random.uniform()))
+                                distance_metric, seed = np.random.uniform()), 
+                                device=device)
     return ConcatDataset(single_datasets)
 
 
 def _kserver_loader(len_data, num_servers, 
             num_requests, server_distribution, request_distribution, 
-            dimensions=2, distance_metric=2, seed=0):
+            dimensions=2, distance_metric=2, seed=0, device='cpu'):
     dataset = _kserver_training_set(len_data, num_servers, 
                                    num_requests, server_distribution, 
                                    request_distribution, dimensions, 
-                                   distance_metric, seed)
+                                   distance_metric, seed, device=device)
     return DataLoader(dataset, batch_size=num_requests, shuffle=False, num_workers=2)
 
 
 def kserver_test_and_train(len_train, len_test, num_servers, num_requests,
                            server_distribution, request_distribution, 
-                           dimensions=2, distance_metric=2, seed=0):
+                           dimensions=2, distance_metric=2, seed=0, device='cpu'):
     train_loader = _kserver_loader(len_train, num_servers, num_requests, server_distribution, 
-                                      request_distribution, dimensions, distance_metric, seed)
+                                      request_distribution, dimensions, distance_metric, seed, device=device)
     test_loader = _kserver_loader(len_test, num_servers, num_requests, server_distribution, 
-                                      request_distribution, dimensions, distance_metric, seed)
+                                      request_distribution, dimensions, distance_metric, seed, device=device)
     return train_loader, test_loader
 
 
