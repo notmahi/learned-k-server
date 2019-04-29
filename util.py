@@ -4,7 +4,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description='Train a neural net to solve the online k-server problem')
     parser.add_argument("--manual_seed", type=int, default=0,
                         help="Random seed")
-    parser.add_argument("--model", "-m", type=str, choices=['lstm', 'fc'], default='lstm',
+    parser.add_argument("--model", "-m", type=str, choices=['lstm', 'fc'], default='fc',
                         help="pick the model to train with")
     parser.add_argument("--epochs", "-e", type=int, default=10,
                         help="Number of epochs")
@@ -20,9 +20,9 @@ def get_parser():
                         help="number of requests in each batch to train with")
     parser.add_argument("--n_requests_test", "-rt", type=int, default=1000,
                         help="number of requests to test with overall")
-    parser.add_argument("--hidden_layers", "-hl", type=int, default=3,
+    parser.add_argument("--hidden_layers", "-hl", type=int, default=5,
                         help="number of hidden layers in the network")
-    parser.add_argument("--hidden_units", "-hu", type=int, default=10,
+    parser.add_argument("--hidden_units", "-hu", type=int, default=20,
                         help="number of hidden units in each layer of the network")
     parser.add_argument("--dims", "-d", type=int, default=2,
                         help="Dimension of the dataset")

@@ -48,14 +48,15 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
             # TODO: See if we should change it to a probabilistic model
             model_pred = log_probs.argmax()
             model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
-            locations[model_pred] = y
+            # locations[model_pred] = X.reshape(-1, parser.dims)
+            locations[y] = X.reshape(-1, parser.dims)
         total_model_loss += (model_loss.item())
         total_model_cost += model_cost
         model_loss.backward()
         optimizer.step()
     if verbose:
-        print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
-            epoch, len(training_set), total_model_cost, total_optimal_cost, 
+        print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
+            epoch, total_model_cost, total_optimal_cost, 
             total_model_cost/total_optimal_cost, total_model_loss))
 
 
@@ -83,16 +84,16 @@ def test(epoch, model, test_set, writer, verbose=True):
             # Gives the index of the server to move
             model_pred = log_probs.argmax()
             model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
-            locations[model_pred] = y
+            locations[y] = X.reshape(-1, parser.dims)
         total_model_cost += model_cost
         total_model_loss += (model_loss.item())
     if verbose:
         print('Testing:')
-        print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
-            epoch, len(training_set), total_model_cost, total_optimal_cost, 
+        print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
+            epoch, total_model_cost, total_optimal_cost, 
             total_model_cost/total_optimal_cost, total_model_loss))
 
-    save_checkpoint(epoch, {
+    save_model(epoch, {
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'optimizer' : optimizer.state_dict(),
@@ -105,7 +106,7 @@ writer = SummaryWriter(model_dir)
 
 def save_model(epoch, model_dict):
     filename = os.path.join(model_dir, 'checkpoint_{}'.format(epoch))
-    torch.save(state, filename)
+    torch.save(model_dict, filename)
 
 # Training/test set details
 num_servers = parser.n_servers
