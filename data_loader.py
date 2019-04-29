@@ -3,6 +3,10 @@ import torch
 from torch.utils.data import Dataset, ConcatDataset, DataLoader
 import tqdm
 
+# # For creating multiple CUDA tensors in a dataloader
+# import torch
+# torch.multiprocessing.set_start_method("spawn")
+
 from optimal_offline import KServer
 
 
@@ -61,7 +65,7 @@ class KServerDataset(Dataset):
     """
     def __init__(self, num_servers, 
                  num_requests, server_distribution, request_distribution, 
-                 dimensions=2, distance_metric=2, seed=0, device='cpu'):
+                 dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
         np.random.seed(seed)
         self.servers = server_distribution.sample(num_servers)
         self.requests = request_distribution.sample(num_requests)
@@ -71,16 +75,31 @@ class KServerDataset(Dataset):
 
         if type(device) == str:
             device = torch.device(device)
-        self.servers = torch.Tensor(self.servers, device=device)
-        self.requests = torch.Tensor(self.requests, device=device)
+        self.servers = torch.Tensor(self.servers)
+        self.requests = torch.Tensor(self.requests)
         self.optimal_movement = torch.Tensor(self.optimal_movement, device=device).type(torch.LongTensor)
         self.optimal_movement.unsqueeze_(-1)
+
+        all_inputs = []
+        locations = self.servers.clone()
+        for X, y in zip(self.requests, self.optimal_movement):
+            # go through each example, get the starting points, etc.
+            X_all = torch.cat((locations, X.reshape(-1, dimensions)))
+            all_inputs.append(X_all.clone())
+            locations[y] = X.reshape(-1, dimensions)
+        self.batch = torch.stack(all_inputs)
+        assert style in ['predicted', 'optimal']
+        self.style = style
+
 
     def __len__(self):
         return len(self.optimal_movement)
     
     def __getitem__(self, idx):
-        return (self.requests[idx], self.optimal_movement[idx])
+        if self.style == 'predicted':
+            return (self.requests[idx], self.optimal_movement[idx])
+        elif self.style == 'optimal':
+            return (self.batch[idx], self.optimal_movement[idx])
 
 
 class ConstantDistribution(AbstractDistribution):
@@ -94,7 +113,7 @@ class ConstantDistribution(AbstractDistribution):
 
 def _kserver_training_set(len_data, num_servers, 
             num_requests, server_distribution, request_distribution, 
-            dimensions=2, distance_metric=2, seed=0, device='cpu'):
+            dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
     np.random.seed(seed)
     batch_size = num_requests
     single_datasets = []
@@ -103,27 +122,28 @@ def _kserver_training_set(len_data, num_servers,
                                 num_requests, server_distribution, 
                                 request_distribution, dimensions, 
                                 distance_metric, seed = np.random.randint(0, len_data), 
-                                device=device))
+                                device=device, style=style))
     return ConcatDataset(single_datasets)
 
 
 def _kserver_loader(len_data, num_servers, 
             num_requests, server_distribution, request_distribution, 
-            dimensions=2, distance_metric=2, seed=0, device='cpu'):
+            dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
     dataset = _kserver_training_set(len_data, num_servers, 
                                    num_requests, server_distribution, 
                                    request_distribution, dimensions, 
-                                   distance_metric, seed, device=device)
+                                   distance_metric, seed, device=device, style=style)
     return DataLoader(dataset, batch_size=num_requests, shuffle=False, num_workers=2)
 
 
 def kserver_test_and_train(len_train, len_test, num_servers, num_requests,
                            server_distribution, request_distribution, 
-                           dimensions=2, distance_metric=2, seed=0, device='cpu'):
+                           dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
     train_loader = _kserver_loader(len_train, num_servers, num_requests, server_distribution, 
-                                      request_distribution, dimensions, distance_metric, seed, device=device)
+                                   request_distribution, dimensions, distance_metric, seed, device=device, style=style)
+    # Testing is always done with predicted stuff, so we used the predicted data loader mode
     test_loader = _kserver_loader(len_test, num_servers, num_requests, server_distribution, 
-                                      request_distribution, dimensions, distance_metric, seed, device=device)
+                                  request_distribution, dimensions, distance_metric, seed, device=device, style='predicted')
     return train_loader, test_loader
 
 

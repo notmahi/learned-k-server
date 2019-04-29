@@ -37,19 +37,26 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
         locations = servers.clone().to(device)
         total_loss = 0
         optimizer.zero_grad()
-        for X, y in zip(X_batch, y_batch):
-            # go through each example, get the starting points, etc.
-            X_all = torch.cat((locations, X.reshape(-1, parser.dims)))
+        if batch_style == 'predicted':
+            for X, y in zip(X_batch, y_batch):
+                X, y = X.to(device), y.to(device)
+                # go through each example, get the starting points, etc.
+                X_all = torch.cat((locations, X.reshape(-1, parser.dims)))
+                # log_probs is the log probability of the elements
+                log_probs = model(X_all)
+                model_loss = F.nll_loss(log_probs, y)
+                total_loss += model_loss
+                # Gives the index of the server to move
+                # TODO: See if we should change it to a probabilistic model
+                model_pred = log_probs.argmax()
+                model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
+                # locations[model_pred] = X.reshape(-1, parser.dims)
+                locations[y] = X.reshape(-1, parser.dims)
+        else:
             # log_probs is the log probability of the elements
-            log_probs = model(X_all)
-            model_loss = F.nll_loss(log_probs, y)
+            log_probs = model(X_batch)
+            model_loss = F.nll_loss(log_probs, y_batch.squeeze_())
             total_loss += model_loss
-            # Gives the index of the server to move
-            # TODO: See if we should change it to a probabilistic model
-            model_pred = log_probs.argmax()
-            model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
-            # locations[model_pred] = X.reshape(-1, parser.dims)
-            locations[y] = X.reshape(-1, parser.dims)
         total_model_loss += (model_loss.item())
         total_model_cost += model_cost
         model_loss.backward()
@@ -75,6 +82,7 @@ def test(epoch, model, test_set, writer, verbose=True):
         locations = servers.clone().to(device)
         total_loss = 0
         for X, y in zip(X_batch, y_batch):
+            X, y = X.to(device), y.to(device)
             # go through each example, get the starting points, etc.
             X_all = torch.cat((locations, X.reshape(-1, parser.dims)))
             # log_probs is the log probability of the elements
@@ -84,7 +92,8 @@ def test(epoch, model, test_set, writer, verbose=True):
             # Gives the index of the server to move
             model_pred = log_probs.argmax()
             model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
-            locations[y] = X.reshape(-1, parser.dims)
+            # Here, we go sequentially and solve the problem with our neural net
+            locations[model_pred] = X.reshape(-1, parser.dims)
         total_model_cost += model_cost
         total_model_loss += (model_loss.item())
     if verbose:
@@ -115,6 +124,7 @@ batch_size = parser.batch_size
 test_set_size = parser.n_requests_test
 dims = parser.dims
 metric = parser.dist_metric
+batch_style = parser.batch_style
 
 def distance_function(x, y, metric=metric):
     return torch.norm(x-y, p=metric)
@@ -158,7 +168,8 @@ training_set, test_set = kserver_test_and_train(training_set_size,
                                                 test_set_size, 
                                                 num_servers, batch_size, 
                                                 server_distribution, request_distribution, 
-                                                dimensions=dims, distance_metric=metric, device=device)
+                                                dimensions=dims, distance_metric=metric, 
+                                                device=device, style=batch_style)
 
 if parser.verbose:
     print ("Set up training data")

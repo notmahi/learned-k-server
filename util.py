@@ -32,4 +32,6 @@ def get_parser():
                         help="Directory where we should save the model and the tensorboard")
     parser.add_argument("--verbose", "-v", help="Increase output verbosity",
                         action="store_true")
+    parser.add_argument("--batch_style", help="Batch style, either optimal server locations or predicted server locs",
+                        type=str, choices=['predicted', 'optimal'], default='optimal')
     return parser
