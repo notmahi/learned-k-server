@@ -30,4 +30,6 @@ def get_parser():
                         help="Mertic in which the distance is measured")
     parser.add_argument("--model_dir", type=str, default='trained_models/lstm',
                         help="Directory where we should save the model and the tensorboard")
+    parser.add_argument("--verbose", "-v", help="Increase output verbosity",
+                        action="store_true")
     return parser

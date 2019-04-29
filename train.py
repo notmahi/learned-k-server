@@ -14,7 +14,7 @@ from models import model_dict
 from util import get_parser
 
 parser = get_parser()
-parser.parse_args()
+parser = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
 if use_cuda:
@@ -27,17 +27,19 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
     total_model_cost = 0
     total_model_loss = 0
     model.train()
+    datasets = training_set.dataset.datasets
     for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(training_set)):
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         # first, get the list of servers
-        servers = training_set.datasets[i].servers
-        optimal_cost = training_set.datasets[i].cost
+        servers = datasets[i].servers
+        total_optimal_cost += datasets[i].cost
         model_cost = 0
-        locations = torch.Tensor(servers, device=device)
+        locations = servers.clone().to(device)
         total_loss = 0
         optimizer.zero_grad()
         for X, y in zip(X_batch, y_batch):
             # go through each example, get the starting points, etc.
-            X_all = torch.cat(locations, X)
+            X_all = torch.cat((locations, X.reshape(-1, parser.dims)))
             # log_probs is the log probability of the elements
             log_probs = model(X_all)
             model_loss = F.nll_loss(log_probs, y)
@@ -45,10 +47,11 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
             # Gives the index of the server to move
             # TODO: See if we should change it to a probabilistic model
             model_pred = log_probs.argmax()
-            model_cost += distance_function(locations[i], y).item()
-            locations[i] = y
+            model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
+            locations[model_pred] = y
         total_model_loss += (model_loss.item())
-        model_loss.backwards()
+        total_model_cost += model_cost
+        model_loss.backward()
         optimizer.step()
     if verbose:
         print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
@@ -60,25 +63,28 @@ def test(epoch, model, test_set, writer, verbose=True):
     total_optimal_cost = 0
     total_model_cost = 0
     total_model_loss = 0
-    model.test()
+    model.eval()
+    datasets = test_set.dataset.datasets
     for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(test_set)):
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         # first, get the list of servers
-        servers = test_set.datasets[i].servers
-        optimal_cost = test_set.datasets[i].cost
+        servers = datasets[i].servers
+        total_optimal_cost += datasets[i].cost
         model_cost = 0
-        locations = torch.Tensor(servers, device=device)
+        locations = servers.clone().to(device)
         total_loss = 0
         for X, y in zip(X_batch, y_batch):
             # go through each example, get the starting points, etc.
-            X_all = torch.cat(locations, X)
+            X_all = torch.cat((locations, X.reshape(-1, parser.dims)))
             # log_probs is the log probability of the elements
             log_probs = model(X_all)
             model_loss = F.nll_loss(log_probs, y)
             total_loss += model_loss
             # Gives the index of the server to move
             model_pred = log_probs.argmax()
-            model_cost += distance_function(locations[i], y).item()
-            locations[i] = y
+            model_cost += distance_function(locations[model_pred], X.reshape(-1, parser.dims)).item()
+            locations[model_pred] = y
+        total_model_cost += model_cost
         total_model_loss += (model_loss.item())
     if verbose:
         print('Testing:')
@@ -124,6 +130,9 @@ model = model(dims, num_servers, hidden_units, hidden_layers)
 model = model.to(device)
 optimizer = optimizer(model.parameters(), lr=learning_rate)
 
+if parser.verbose:
+    print ("Set up model")
+
 # Load dataset
 # TODO (Mahi): Get a better way of inputting the distributions
 server_distribution = distribution_from_centers([np.array([0., 0.])], [np.array([0.])])
@@ -142,6 +151,9 @@ training_set, test_set = kserver_test_and_train(training_set_size,
                                                 num_servers, batch_size, 
                                                 server_distribution, request_distribution, 
                                                 dimensions=dims, distance_metric=metric, device=device)
+
+if parser.verbose:
+    print ("Set up training data")
 
 if __name__ == '__main__':
     for e in range(epochs):

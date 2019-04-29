@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, ConcatDataset, DataLoader
+import tqdm
 
 from optimal_offline import KServer
 
@@ -72,7 +73,8 @@ class KServerDataset(Dataset):
             device = torch.device(device)
         self.servers = torch.Tensor(self.servers, device=device)
         self.requests = torch.Tensor(self.requests, device=device)
-        self.optimal_movement = torch.Tensor(self.optimal_movement, device=device)
+        self.optimal_movement = torch.Tensor(self.optimal_movement, device=device).type(torch.LongTensor)
+        self.optimal_movement.unsqueeze_(-1)
 
     def __len__(self):
         return len(self.optimal_movement)
@@ -96,12 +98,12 @@ def _kserver_training_set(len_data, num_servers,
     np.random.seed(seed)
     batch_size = num_requests
     single_datasets = []
-    for i in range(len_data // num_requests):
+    for i in tqdm.trange(len_data // num_requests):
         single_datasets.append(KServerDataset(num_servers, 
                                 num_requests, server_distribution, 
                                 request_distribution, dimensions, 
-                                distance_metric, seed = np.random.uniform()), 
-                                device=device)
+                                distance_metric, seed = np.random.randint(0, len_data), 
+                                device=device))
     return ConcatDataset(single_datasets)
 
 

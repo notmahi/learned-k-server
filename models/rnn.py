@@ -19,7 +19,10 @@ class LSTMModel(nn.Module):
         self.linear = nn.Linear(hidden_dim, num_servers)
 
     def forward(self, req_sequence):
-        lstm_out, _ = self.lstm(req_sequence.view(self.input_dim, -1))
-        logits = self.linear(lstm_out.view(self.hidden_dim, -1))
+        lstm_out, _ = self.lstm(req_sequence.view(1, -1, self.input_dim))
+        print(lstm_out.shape)
+        logits = self.linear(lstm_out.view(1, -1, self.hidden_dim))
+        print(logits.shape)
         server_scores = F.log_softmax(logits.view(self.num_servers, -1), dim=1)
+        print(server_scores.shape)
         return server_scores
