@@ -55,7 +55,7 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
         optimizer.step()
     if verbose:
         print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
-            i, len(training_set), total_model_cost, total_optimal_cost, 
+            epoch, len(training_set), total_model_cost, total_optimal_cost, 
             total_model_cost/total_optimal_cost, total_model_loss))
 
 
@@ -89,16 +89,23 @@ def test(epoch, model, test_set, writer, verbose=True):
     if verbose:
         print('Testing:')
         print('Epoch {}/{}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
-            i, len(training_set), total_model_cost, total_optimal_cost, 
+            epoch, len(training_set), total_model_cost, total_optimal_cost, 
             total_model_cost/total_optimal_cost, total_model_loss))
 
-def save_model(epoch, model):
-    pass
+    save_checkpoint(epoch, {
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'optimizer' : optimizer.state_dict(),
+        })
 
 # Summary writer and model directory
 model_dir = parser.model_dir
 # Initialize tensorboard writer
 writer = SummaryWriter(model_dir)
+
+def save_model(epoch, model_dict):
+    filename = os.path.join(model_dir, 'checkpoint_{}'.format(epoch))
+    torch.save(state, filename)
 
 # Training/test set details
 num_servers = parser.n_servers
