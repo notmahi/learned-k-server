@@ -49,15 +49,19 @@ class MixedDistribution(AbstractDistribution):
         np.random.seed(seed)
 
     def sample(self, n):
-        num_samples = np.rint([n * p for p in self.weights]).astype(int)
-        samples = [self.distributions[i].sample(num_sample) for i, num_sample in enumerate(num_samples)]
-        if np.sum(num_samples) < n:
-            choices = np.random.choice(len(self.distributions), (n - np.sum(num_samples)), p=self.weights)
-            for c in choices:
-                samples.append(self.distributions[c].sample(1))
-        samples = np.concatenate(samples)
-        np.random.shuffle(samples)
+        components = np.random.choice(len(self.distributions), n, p = self.weights)
+        samples = np.array([self.distributions[i].sample(1) for i in components]).reshape(n, -1)
         return samples
+
+        # num_samples = np.rint([n * p for p in self.weights]).astype(int)
+        # samples = [self.distributions[i].sample(num_sample) for i, num_sample in enumerate(num_samples)]
+        # if np.sum(num_samples) < n:
+        #     choices = np.random.choice(len(self.distributions), (n - np.sum(num_samples)), p=self.weights)
+        #     for c in choices:
+        #         samples.append(self.distributions[c].sample(1))
+        # samples = np.concatenate(samples)
+        # np.random.shuffle(samples)
+        # return samples
 
 class KServerDataset(Dataset):
     """
@@ -79,6 +83,7 @@ class KServerDataset(Dataset):
         self.requests = torch.Tensor(self.requests)
         self.optimal_movement = torch.Tensor(self.optimal_movement, device=device).type(torch.LongTensor)
         self.optimal_movement.unsqueeze_(-1)
+        self.move_closest_cost = 0
 
         all_inputs = []
         locations = self.servers.clone()
@@ -96,6 +101,7 @@ class KServerDataset(Dataset):
                                      p=distance_metric, dim=1, keepdim=True)
             # put in the minimum distance
             move_closest_labels.append(dist_matrix.argmax().item())
+            self.move_closest_cost -= dist_matrix.max().item()
             move_closest_locations[move_closest_labels[-1]] = X.reshape(-1, dimensions)
         self.move_closest_labels = torch.Tensor(move_closest_labels).type(torch.LongTensor).reshape(self.optimal_movement.shape)
         self.move_closest_batch = torch.stack(X_all_move_closest)
@@ -148,7 +154,8 @@ def _kserver_training_set(len_data, num_servers,
                                 distance_metric, seed = np.random.randint(0, len_data), 
                                 device=device, style=style))
         # set them to move closest
-        single_datasets[-1].set_algorithm('move_closest')
+        # TODO: Make this better
+        # single_datasets[-1].set_algorithm('move_closest')
     return ConcatDataset(single_datasets)
 
 

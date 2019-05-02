@@ -74,14 +74,14 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
                     # Add random shuffling.
                     shuffle += 1
                     random.shuffle(permutations[i])
-                    shuffled_x_indices = permutations[i] + [parser.n_servers]
-                    X_batch_shuffled = X_batch[:, shuffled_x_indices, :]
-                    y_batch_shuffled = torch.Tensor([permutations[i][j] for j in y_batch.type(torch.LongTensor).squeeze_()])
-                    y_batch_shuffled = y_batch_shuffled.reshape(y_batch.shape).type(torch.LongTensor)
                 else:
                     no_shuffle += 1
-                    X_batch_shuffled, y_batch_shuffled = X_batch, y_batch
                 
+                shuffled_x_indices = permutations[i] + [parser.n_servers]
+                X_batch_shuffled = X_batch[:, shuffled_x_indices, :]
+                y_batch_shuffled = torch.Tensor([permutations[i][j] for j in y_batch.type(torch.LongTensor).squeeze_()])
+                y_batch_shuffled = y_batch_shuffled.reshape(y_batch.shape).type(torch.LongTensor)
+
                 X_batch_shuffled, y_batch_shuffled = X_batch_shuffled.to(device), y_batch_shuffled.to(device)
                 # log_probs is the log probability of the elements
                 log_probs = model(X_batch_shuffled)
@@ -100,6 +100,7 @@ def test(epoch, model, test_set, writer, verbose=True):
     total_optimal_cost = 0
     total_model_cost = 0
     total_model_loss = 0
+    total_move_closest_cost = 0
     model.eval()
     datasets = test_set.dataset.datasets
     for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(test_set)):
@@ -107,6 +108,7 @@ def test(epoch, model, test_set, writer, verbose=True):
         # first, get the list of servers
         servers = datasets[i].servers
         total_optimal_cost += datasets[i].cost
+        total_move_closest_cost += datasets[i].move_closest_cost
         model_cost = 0
         locations = servers.clone().to(device)
         total_loss = 0
@@ -127,9 +129,10 @@ def test(epoch, model, test_set, writer, verbose=True):
         total_model_loss += (model_loss.item())
     if verbose:
         print('Testing:')
-        print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
+        print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} MC Ratio: {} Loss: {}'.format(
             epoch, total_model_cost, total_optimal_cost, 
-            total_model_cost/total_optimal_cost, total_model_loss/len(test_set)))
+            total_model_cost/total_optimal_cost, total_move_closest_cost/total_optimal_cost, 
+            total_model_loss/len(test_set)))
 
     save_model(epoch, {
             'epoch': epoch + 1,
@@ -200,7 +203,8 @@ test_batch_size = batch_size
 training_set, test_set = kserver_test_and_train(training_set_size, test_set_size, 
                                                 num_servers, num_requests, 
                                                 training_batch_size, test_batch_size,
-                                                server_distribution, request_distribution, 
+                                                # TODO: Change this back
+                                                request_distribution, request_distribution, 
                                                 dimensions=dims, distance_metric=metric, 
                                                 device=device, style=batch_style)
 
