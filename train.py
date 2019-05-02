@@ -6,6 +6,7 @@ import torch.optim as optim
 import json
 import os
 import numpy as np
+import random
 from tensorboardX import SummaryWriter
 import tqdm
 
@@ -22,14 +23,22 @@ if use_cuda:
     	torch.cuda.manual_seed(parser.manual_seed)
 device = torch.device("cuda" if use_cuda else "cpu")
 
+def _generate_shuffled_incides(shuffled_indices, n_servers, n_dim):
+    
+    return idxs
+
 def train(epoch, model, training_set, optimizer, writer, verbose=True):
     total_optimal_cost = 0
     total_model_cost = 0
     total_model_loss = 0
     model.train()
     datasets = training_set.dataset.datasets
+    # Add shuffling, one fixed shuffle per epoch
+    shuffled_indices = list(range(parser.n_servers))
+    random.shuffle(shuffled_indices)
+    shuffled_x_indices = shuffled_indices + [parser.n_servers]
+
     for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(training_set)):
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         # first, get the list of servers
         servers = datasets[i].servers
         total_optimal_cost += datasets[i].cost
@@ -53,9 +62,14 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
                 # locations[model_pred] = X.reshape(-1, parser.dims)
                 locations[y] = X.reshape(-1, parser.dims)
         else:
+            # Add random shuffling.
+            X_batch_shuffled = X_batch[:, shuffled_x_indices, :]
+            y_batch_shuffled = torch.Tensor([shuffled_indices[i] for i in y_batch.type(torch.LongTensor).squeeze_()])
+            y_batch_shuffled = y_batch_shuffled.reshape(y_batch.shape).type(torch.LongTensor)
+            X_batch_shuffled, y_batch_shuffled = X_batch_shuffled.to(device), y_batch_shuffled.to(device)
             # log_probs is the log probability of the elements
-            log_probs = model(X_batch)
-            model_loss = F.nll_loss(log_probs, y_batch.squeeze_())
+            log_probs = model(X_batch_shuffled)
+            model_loss = F.nll_loss(log_probs, y_batch_shuffled.squeeze_())
             total_loss += model_loss
         total_model_loss += (model_loss.item())
         total_model_cost += model_cost
@@ -64,7 +78,7 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
     if verbose:
         print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
             epoch, total_model_cost, total_optimal_cost, 
-            total_model_cost/total_optimal_cost, total_model_loss))
+            total_model_cost/total_optimal_cost, total_model_loss/len(training_set)))
 
 
 def test(epoch, model, test_set, writer, verbose=True):
@@ -100,7 +114,7 @@ def test(epoch, model, test_set, writer, verbose=True):
         print('Testing:')
         print('Epoch {}: \t\tModel cost/Optimal Cost: {}/{}\n\t\t\tRatio: {} Loss: {}'.format(
             epoch, total_model_cost, total_optimal_cost, 
-            total_model_cost/total_optimal_cost, total_model_loss))
+            total_model_cost/total_optimal_cost, total_model_loss/len(test_set)))
 
     save_model(epoch, {
             'epoch': epoch + 1,
@@ -142,7 +156,7 @@ optimizer = optim.SGD if parser.optim == 'sgd' else optim.Adam
 # Create model
 model = model_dict.get(architecture)
 if model == None:
-    model = model_dict['lstm']
+    model = model_dict['fc']
 
 model = model(dims, num_servers, hidden_units, hidden_layers)
 model = model.to(device)
