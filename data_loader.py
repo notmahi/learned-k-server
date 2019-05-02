@@ -97,7 +97,7 @@ class KServerDataset(Dataset):
             # put in the minimum distance
             move_closest_labels.append(dist_matrix.argmax().item())
             move_closest_locations[move_closest_labels[-1]] = X.reshape(-1, dimensions)
-        self.move_closest_labels = torch.Tensor(move_closest_labels)
+        self.move_closest_labels = torch.Tensor(move_closest_labels).type(torch.LongTensor).reshape(self.optimal_movement.shape)
         self.move_closest_batch = torch.stack(X_all_move_closest)
 
         # print(self.move_closest_labels.shape, self.move_closest_batch.shape)
@@ -147,6 +147,8 @@ def _kserver_training_set(len_data, num_servers,
                                 request_distribution, dimensions, 
                                 distance_metric, seed = np.random.randint(0, len_data), 
                                 device=device, style=style))
+        # set them to move closest
+        single_datasets[-1].set_algorithm('move_closest')
     return ConcatDataset(single_datasets)
 
 
