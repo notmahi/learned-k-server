@@ -16,6 +16,8 @@ def get_parser():
                         help="number of servers in the instance")
     parser.add_argument("--n_requests_train", "-r", type=int, default=100000,
                         help="number of requests to train with")
+    parser.add_argument("--n_requests_batch", "-nb", type=int, default=20,
+                        help="number of requests to train in each problem instance")
     parser.add_argument("--batch_size", "-b", type=int, default=100,
                         help="number of requests in each batch to train with")
     parser.add_argument("--n_requests_test", "-rt", type=int, default=1000,
