@@ -40,7 +40,10 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
     # shuffled_indices[i], shuffled_indices[j] = shuffled_indices[j], shuffled_indices[i]
     # random.shuffle(shuffled_indices)
     # shuffled_x_indices = shuffled_indices + [parser.n_servers]
-
+    global permutations
+    num_batches =  len(training_set)
+    permutations = [[i for i in range(parser.n_servers)] for i in range(num_batches)]
+    
     shuffle, no_shuffle = 0, 0
     for j_k in range(1):
         for i, (X_batch, y_batch) in enumerate(tqdm.tqdm(training_set)):
@@ -70,10 +73,10 @@ def train(epoch, model, training_set, optimizer, writer, verbose=True):
                 if random.randrange(0, 10) <= 0:
                     # Add random shuffling.
                     shuffle += 1
-                    random.shuffle(shuffled_indices)
-                    shuffled_x_indices = shuffled_indices + [parser.n_servers]
+                    random.shuffle(permutations[i])
+                    shuffled_x_indices = permutations[i] + [parser.n_servers]
                     X_batch_shuffled = X_batch[:, shuffled_x_indices, :]
-                    y_batch_shuffled = torch.Tensor([shuffled_indices[i] for i in y_batch.type(torch.LongTensor).squeeze_()])
+                    y_batch_shuffled = torch.Tensor([permutations[i][j] for j in y_batch.type(torch.LongTensor).squeeze_()])
                     y_batch_shuffled = y_batch_shuffled.reshape(y_batch.shape).type(torch.LongTensor)
                 else:
                     no_shuffle += 1
