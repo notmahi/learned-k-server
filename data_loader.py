@@ -82,11 +82,16 @@ class KServerDataset(Dataset):
 
         all_inputs = []
         locations = self.servers.clone()
+        move_closest_locations = self.servers.clone()
+        move_closest_labels = []
         for X, y in zip(self.requests, self.optimal_movement):
             # go through each example, get the starting points, etc.
             X_all = torch.cat((locations, X.reshape(-1, dimensions)))
             all_inputs.append(X_all.clone())
             locations[y] = X.reshape(-1, dimensions)
+            dist_matrix = torch.norm(move_closest_locations - X.reshape(-1, dimension), 
+                                     p=distance_metric, dim=1, keepdim=True)
+            move_closest_labels.append()
         self.batch = torch.stack(all_inputs)
         assert style in ['predicted', 'optimal']
         self.style = style
@@ -127,22 +132,22 @@ def _kserver_training_set(len_data, num_servers,
 
 
 def _kserver_loader(len_data, num_servers, 
-            num_requests, server_distribution, request_distribution, 
+            num_requests, batch_size, server_distribution, request_distribution, 
             dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
     dataset = _kserver_training_set(len_data, num_servers, 
                                    num_requests, server_distribution, 
                                    request_distribution, dimensions, 
                                    distance_metric, seed, device=device, style=style)
-    return DataLoader(dataset, batch_size=num_requests, shuffle=False, num_workers=2)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 
-def kserver_test_and_train(len_train, len_test, num_servers, num_requests,
+def kserver_test_and_train(len_train, len_test, num_servers, num_requests, training_batch_size, test_batch_size,
                            server_distribution, request_distribution, 
                            dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
-    train_loader = _kserver_loader(len_train, num_servers, num_requests, server_distribution, 
+    train_loader = _kserver_loader(len_train, num_servers, num_requests, training_batch_size, server_distribution, 
                                    request_distribution, dimensions, distance_metric, seed, device=device, style=style)
     # Testing is always done with predicted stuff, so we used the predicted data loader mode
-    test_loader = _kserver_loader(len_test, num_servers, num_requests, server_distribution, 
+    test_loader = _kserver_loader(len_test, num_servers, num_requests, test_batch_size, server_distribution, 
                                   request_distribution, dimensions, distance_metric, seed, device=device, style='predicted')
     return train_loader, test_loader
 
