@@ -65,7 +65,7 @@ class KServerDataset(Dataset):
     """
     def __init__(self, num_servers, 
                  num_requests, server_distribution, request_distribution, 
-                 dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal'):
+                 dimensions=2, distance_metric=2, seed=0, device='cpu', style='optimal', algorithm='optimal'):
         np.random.seed(seed)
         self.servers = server_distribution.sample(num_servers)
         self.requests = request_distribution.sample(num_requests)
@@ -84,28 +84,47 @@ class KServerDataset(Dataset):
         locations = self.servers.clone()
         move_closest_locations = self.servers.clone()
         move_closest_labels = []
+        X_all_move_closest = []
         for X, y in zip(self.requests, self.optimal_movement):
             # go through each example, get the starting points, etc.
             X_all = torch.cat((locations, X.reshape(-1, dimensions)))
             all_inputs.append(X_all.clone())
             locations[y] = X.reshape(-1, dimensions)
-            dist_matrix = torch.norm(move_closest_locations - X.reshape(-1, dimension), 
+            
+            X_all_move_closest.append( torch.cat((move_closest_locations, X.reshape(-1, dimensions))) )
+            dist_matrix = -torch.norm(move_closest_locations - X.reshape(-1, dimensions), 
                                      p=distance_metric, dim=1, keepdim=True)
-            move_closest_labels.append()
+            # put in the minimum distance
+            move_closest_labels.append(dist_matrix.argmax().item())
+            move_closest_locations[move_closest_labels[-1]] = X.reshape(-1, dimensions)
+        self.move_closest_labels = torch.Tensor(move_closest_labels)
+        self.move_closest_batch = torch.stack(X_all_move_closest)
+
+        # print(self.move_closest_labels.shape, self.move_closest_batch.shape)
         self.batch = torch.stack(all_inputs)
         assert style in ['predicted', 'optimal']
         self.style = style
-
+        self.algorithm = algorithm
 
     def __len__(self):
         return len(self.optimal_movement)
     
-    def __getitem__(self, idx):
-        if self.style == 'predicted':
-            return (self.requests[idx], self.optimal_movement[idx])
-        elif self.style == 'optimal':
-            return (self.batch[idx], self.optimal_movement[idx])
+    def set_algorithm(self, algorithm):
+        self.algorithm = algorithm
 
+    def __getitem__(self, idx):
+        if self.algorithm == 'move_closest':
+            if self.style == 'predicted':
+                return (self.requests[idx], self.move_closest_labels[idx])
+            elif self.style == 'optimal':
+                return (self.move_closest_batch[idx], self.move_closest_labels[idx])
+        elif self.algorithm == 'optimal':
+            if self.style == 'predicted':
+                return (self.requests[idx], self.optimal_movement[idx])
+            elif self.style == 'optimal':
+                return (self.batch[idx], self.optimal_movement[idx])
+        else:
+            raise ValueError('Algorithm undefined')
 
 class ConstantDistribution(AbstractDistribution):
     def __init__(self, points):
