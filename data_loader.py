@@ -81,7 +81,7 @@ class KServerDataset(Dataset):
             device = torch.device(device)
         self.servers = torch.Tensor(self.servers)
         self.requests = torch.Tensor(self.requests)
-        self.optimal_movement = torch.Tensor(self.optimal_movement, device=device).type(torch.LongTensor)
+        self.optimal_movement = torch.Tensor(self.optimal_movement).type(torch.LongTensor)
         self.optimal_movement.unsqueeze_(-1)
         self.move_closest_cost = 0
 
@@ -175,7 +175,8 @@ def kserver_test_and_train(len_train, len_test, num_servers, num_requests, train
     train_loader = _kserver_loader(len_train, num_servers, num_requests, training_batch_size, server_distribution, 
                                    request_distribution, dimensions, distance_metric, seed, device=device, style=style)
     # Testing is always done with predicted stuff, so we used the predicted data loader mode
-    test_loader = _kserver_loader(len_test, num_servers, num_requests, test_batch_size, server_distribution, 
+    assert num_requests == test_batch_size
+    test_loader = _kserver_loader(len_test, num_servers, num_requests, num_requests, server_distribution, 
                                   request_distribution, dimensions, distance_metric, seed, device=device, style='predicted')
     return train_loader, test_loader
 
